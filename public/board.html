@@ -240,30 +240,50 @@
 
       let drawCtx = null;
 
-      function attachDrawCanvas(id) {
+      function redrawStrokes(ctx, strokes) {
+        const canvas = ctx.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        (strokes || []).forEach((s) => {
+          if (!s.points || s.points.length < 2) return;
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = s.width;
+          ctx.beginPath();
+          ctx.moveTo(s.points[0].x * canvas.width, s.points[0].y * canvas.height);
+          for (let i = 1; i < s.points.length; i++) {
+            ctx.lineTo(s.points[i].x * canvas.width, s.points[i].y * canvas.height);
+          }
+          ctx.stroke();
+        });
+      }
+
+      function attachDrawCanvas(id, strokes) {
         const canvas = document.getElementById(id);
         if (!canvas) return;
         canvas.width = 800;
         canvas.height = 600;
         drawCtx = canvas.getContext("2d");
-        drawCtx.lineWidth = 6;
         drawCtx.lineCap = "round";
         drawCtx.lineJoin = "round";
-        drawCtx.strokeStyle = "#0d0d0f";
+        redrawStrokes(drawCtx, strokes);
       }
 
       socket.on("draw:event", (e) => {
         if (!drawCtx) return;
         const canvas = drawCtx.canvas;
-        if (e.type === "clear") {
-          drawCtx.clearRect(0, 0, canvas.width, canvas.height);
-        } else if (e.type === "start") {
+        if (e.type === "start") {
+          drawCtx.strokeStyle = e.color || "#1a1a1a";
+          drawCtx.lineWidth = e.width || 6;
           drawCtx.beginPath();
           drawCtx.moveTo(e.x * canvas.width, e.y * canvas.height);
         } else if (e.type === "move") {
           drawCtx.lineTo(e.x * canvas.width, e.y * canvas.height);
           drawCtx.stroke();
         }
+      });
+
+      socket.on("draw:sync", ({ strokes }) => {
+        if (!drawCtx) return;
+        redrawStrokes(drawCtx, strokes);
       });
 
       socket.on("room:state", (s) => {
@@ -335,7 +355,7 @@
               <div class="actions"><button class="secondary-btn" onclick="endGame()">Spiel beenden</button></div>
             </div>
           `;
-          if (isDrawing) attachDrawCanvas("boardDrawCanvas");
+          if (isDrawing) attachDrawCanvas("boardDrawCanvas", state.currentStrokes);
         } else if (state.phase === "turnEnd") {
           const s = state.lastSummary || {};
           main.innerHTML = `

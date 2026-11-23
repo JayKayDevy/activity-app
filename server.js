@@ -119,7 +119,14 @@ function newRoom(code) {
     lastSummary: null,
     teamTurnPointer: {}, // teamId -> index into playerIds
     timer: null,
+    currentStrokes: [], // {color, width, points:[{x,y}]} for the word being drawn right now
   };
+}
+
+const MAX_STROKES_PER_WORD = 500;
+
+function clearStrokes(room) {
+  room.currentStrokes = [];
 }
 
 function publicState(room) {
@@ -141,11 +148,16 @@ function publicState(room) {
     currentCategoryLabel: room.currentCategory ? CATEGORY_LABELS[room.currentCategory] : null,
     turnCorrectCount: room.turnCorrectCount,
     lastSummary: room.lastSummary,
+    currentStrokes: room.currentCategory === "zeichnen" ? room.currentStrokes : [],
   };
 }
 
 function broadcastState(room) {
   io.to(room.code).emit("room:state", publicState(room));
+}
+
+function broadcastStrokeSync(room) {
+  io.to(room.code).emit("draw:sync", { strokes: room.currentStrokes });
 }
 
 function sendWordToActivePlayer(room) {
@@ -198,6 +210,7 @@ function startTimer(room) {
   room.phase = "playing";
   room.secondsLeft = room.turnSeconds;
   room.currentWord = drawWord(room, room.currentCategory);
+  clearStrokes(room);
   sendWordToActivePlayer(room);
   broadcastState(room);
 
@@ -335,9 +348,9 @@ io.on("connection", (socket) => {
     if (team) team.score++;
     room.turnCorrectCount++;
     room.currentWord = drawWord(room, room.currentCategory);
+    if (room.currentCategory === "zeichnen") clearStrokes(room);
     sendWordToActivePlayer(room);
     broadcastState(room);
-    if (room.currentCategory === "zeichnen") io.to(room.code).emit("draw:event", { type: "clear" });
   });
 
   socket.on("player:skip", ({ code }) => {
@@ -345,14 +358,15 @@ io.on("connection", (socket) => {
     if (!room || room.phase !== "playing") return;
     if (socket.data.playerId !== room.currentPlayerId) return;
     room.currentWord = drawWord(room, room.currentCategory);
+    if (room.currentCategory === "zeichnen") clearStrokes(room);
     sendWordToActivePlayer(room);
-    if (room.currentCategory === "zeichnen") io.to(room.code).emit("draw:event", { type: "clear" });
+    if (room.currentCategory === "zeichnen") broadcastStrokeSync(room);
   });
 
-  socket.on("draw:start", ({ code, x, y }) => {
+  socket.on("draw:start", ({ code, x, y, color, width }) => {
     const room = rooms[code];
     if (!isActiveDrawer(room, socket)) return;
-    socket.to(code).emit("draw:event", { type: "start", x, y });
+    socket.to(code).emit("draw:event", { type: "start", x, y, color, width });
   });
 
   socket.on("draw:move", ({ code, x, y }) => {
@@ -361,16 +375,36 @@ io.on("connection", (socket) => {
     socket.to(code).emit("draw:event", { type: "move", x, y });
   });
 
-  socket.on("draw:end", ({ code }) => {
+  socket.on("draw:strokeEnd", ({ code, color, width, points }) => {
     const room = rooms[code];
     if (!isActiveDrawer(room, socket)) return;
-    socket.to(code).emit("draw:event", { type: "end" });
+    if (!Array.isArray(points) || points.length < 2) return;
+    const safePoints = points
+      .slice(0, 2000)
+      .filter((p) => p && typeof p.x === "number" && typeof p.y === "number")
+      .map((p) => ({ x: Math.max(0, Math.min(1, p.x)), y: Math.max(0, Math.min(1, p.y)) }));
+    if (safePoints.length < 2) return;
+    room.currentStrokes.push({
+      color: typeof color === "string" ? color.slice(0, 16) : "#1a1a1a",
+      width: Math.max(1, Math.min(60, Number(width) || 6)),
+      points: safePoints,
+    });
+    if (room.currentStrokes.length > MAX_STROKES_PER_WORD) room.currentStrokes.shift();
+    broadcastStrokeSync(room);
+  });
+
+  socket.on("draw:undo", ({ code }) => {
+    const room = rooms[code];
+    if (!isActiveDrawer(room, socket)) return;
+    room.currentStrokes.pop();
+    broadcastStrokeSync(room);
   });
 
   socket.on("draw:clear", ({ code }) => {
     const room = rooms[code];
     if (!isActiveDrawer(room, socket)) return;
-    io.to(code).emit("draw:event", { type: "clear" });
+    clearStrokes(room);
+    broadcastStrokeSync(room);
   });
 
   socket.on("board:nextTurn", ({ code }) => {

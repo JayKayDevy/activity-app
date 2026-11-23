@@ -94,6 +94,26 @@
       .draw-row { display: flex; gap: 10px; }
       .draw-row button { padding: 12px; }
       .btn-clear { background: #1a1a20; color: #fff; border: 1px solid #ffffff25; font-size: 14px; }
+      .palette { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+      .swatch {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        border-radius: 50%;
+        border: 3px solid transparent;
+        padding: 0;
+        cursor: pointer;
+      }
+      .swatch.active { border-color: #fff; }
+      .swatch.eraser {
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        border: 3px solid #ffffff40;
+      }
+      .swatch.eraser.active { border-color: #ff2d78; }
     </style>
   </head>
   <body>
@@ -185,8 +205,45 @@
         socket.emit("draw:clear", { code: roomCode });
       }
 
+      function sendUndo() {
+        socket.emit("draw:undo", { code: roomCode });
+      }
+
+      const PEN_COLORS = ["#1a1a1a", "#e74c3c", "#e67e22", "#f1c40f", "#2ecc71", "#3498db", "#9b59b6"];
+      const PEN_WIDTH = 6;
+      const ERASER_COLOR = "#ffffff";
+      const ERASER_WIDTH = 28;
+
+      let currentColor = PEN_COLORS[0];
+      let currentWidth = PEN_WIDTH;
       let drawCtx = null;
       let drawingNow = false;
+      let strokePoints = [];
+
+      function setColor(c) {
+        currentColor = c;
+        currentWidth = PEN_WIDTH;
+        render();
+      }
+
+      function setEraser() {
+        currentColor = ERASER_COLOR;
+        currentWidth = ERASER_WIDTH;
+        render();
+      }
+
+      function isEraser() {
+        return currentColor === ERASER_COLOR;
+      }
+
+      function paletteHtml() {
+        return `
+          <div class="palette">
+            ${PEN_COLORS.map((c) => `<button class="swatch ${currentColor === c ? "active" : ""}" style="background:${c}" onclick="setColor('${c}')"></button>`).join("")}
+            <button class="swatch eraser ${isEraser() ? "active" : ""}" onclick="setEraser()">🧹</button>
+          </div>
+        `;
+      }
 
       function relPos(e, canvas) {
         const rect = canvas.getBoundingClientRect();
@@ -196,28 +253,47 @@
         };
       }
 
-      function attachDrawCanvas(id, interactive) {
+      function redrawStrokes(ctx, strokes) {
+        const canvas = ctx.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        (strokes || []).forEach((s) => {
+          if (!s.points || s.points.length < 2) return;
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = s.width;
+          ctx.beginPath();
+          ctx.moveTo(s.points[0].x * canvas.width, s.points[0].y * canvas.height);
+          for (let i = 1; i < s.points.length; i++) {
+            ctx.lineTo(s.points[i].x * canvas.width, s.points[i].y * canvas.height);
+          }
+          ctx.stroke();
+        });
+      }
+
+      function attachDrawCanvas(id, interactive, strokes) {
         const canvas = document.getElementById(id);
         if (!canvas) return;
         canvas.width = 800;
         canvas.height = 600;
         drawCtx = canvas.getContext("2d");
-        drawCtx.lineWidth = 6;
         drawCtx.lineCap = "round";
         drawCtx.lineJoin = "round";
-        drawCtx.strokeStyle = "#0d0d0f";
+        redrawStrokes(drawCtx, strokes);
         if (!interactive) return;
 
         canvas.addEventListener("pointerdown", (e) => {
           drawingNow = true;
           const { x, y } = relPos(e, canvas);
+          strokePoints = [{ x, y }];
+          drawCtx.strokeStyle = currentColor;
+          drawCtx.lineWidth = currentWidth;
           drawCtx.beginPath();
           drawCtx.moveTo(x * canvas.width, y * canvas.height);
-          socket.emit("draw:start", { code: roomCode, x, y });
+          socket.emit("draw:start", { code: roomCode, x, y, color: currentColor, width: currentWidth });
         });
         canvas.addEventListener("pointermove", (e) => {
           if (!drawingNow) return;
           const { x, y } = relPos(e, canvas);
+          strokePoints.push({ x, y });
           drawCtx.lineTo(x * canvas.width, y * canvas.height);
           drawCtx.stroke();
           socket.emit("draw:move", { code: roomCode, x, y });
@@ -225,7 +301,10 @@
         const endStroke = () => {
           if (!drawingNow) return;
           drawingNow = false;
-          socket.emit("draw:end", { code: roomCode });
+          if (strokePoints.length >= 2) {
+            socket.emit("draw:strokeEnd", { code: roomCode, color: currentColor, width: currentWidth, points: strokePoints });
+          }
+          strokePoints = [];
         };
         canvas.addEventListener("pointerup", endStroke);
         canvas.addEventListener("pointerleave", endStroke);
@@ -235,15 +314,20 @@
       socket.on("draw:event", (e) => {
         if (!drawCtx) return;
         const canvas = drawCtx.canvas;
-        if (e.type === "clear") {
-          drawCtx.clearRect(0, 0, canvas.width, canvas.height);
-        } else if (e.type === "start") {
+        if (e.type === "start") {
+          drawCtx.strokeStyle = e.color || "#1a1a1a";
+          drawCtx.lineWidth = e.width || PEN_WIDTH;
           drawCtx.beginPath();
           drawCtx.moveTo(e.x * canvas.width, e.y * canvas.height);
         } else if (e.type === "move") {
           drawCtx.lineTo(e.x * canvas.width, e.y * canvas.height);
           drawCtx.stroke();
         }
+      });
+
+      socket.on("draw:sync", ({ strokes }) => {
+        if (!drawCtx) return;
+        redrawStrokes(drawCtx, strokes);
       });
 
       socket.on("turn:word", (w) => {
@@ -342,13 +426,15 @@
                 <div class="timer" id="playerTimer">${state.secondsLeft}</div>
                 <div class="word-mini">Zeichne: ${myWord ? myWord.word : "..."}</div>
                 <canvas class="draw-canvas" id="drawCanvas"></canvas>
+                ${paletteHtml()}
                 <div class="draw-row">
+                  <button class="btn-clear" onclick="sendUndo()">↩ Rückgängig</button>
                   <button class="btn-clear" onclick="sendClear()">Leeren</button>
                 </div>
                 <button class="btn-correct" onclick="sendCorrect()">✓ Richtig!</button>
                 <button class="btn-skip" onclick="sendSkip()">Überspringen</button>
               `;
-              attachDrawCanvas("drawCanvas", true);
+              attachDrawCanvas("drawCanvas", true, state.currentStrokes);
             } else {
               main.innerHTML = `
                 <div class="category-chip">${state.currentCategoryLabel}</div>
@@ -366,7 +452,7 @@
               <canvas class="draw-canvas" id="drawCanvas"></canvas>
               ${scoreList()}
             `;
-            attachDrawCanvas("drawCanvas", false);
+            attachDrawCanvas("drawCanvas", false, state.currentStrokes);
           } else {
             main.innerHTML = `
               <div class="category-chip">${state.currentCategoryLabel}</div>
