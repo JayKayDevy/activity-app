@@ -156,6 +156,7 @@
   </head>
   <body>
     <div class="code-badge" id="codeBadge" style="display:none"></div>
+    <div id="connBanner" style="position:fixed;top:14px;left:18px;background:var(--coral);color:#fff;border-radius:10px;padding:6px 12px;font-size:13px;font-weight:700;display:none"></div>
     <div id="main"></div>
 
     <script>
@@ -173,14 +174,32 @@
         });
       }
 
+      let roomLost = false;
+
+      socket.on("connect", init);
       if (socket.connected) init();
-      else socket.on("connect", init);
+
+      socket.on("disconnect", () => {
+        setConnBanner("Verbindung getrennt – verbinde neu...");
+      });
+      socket.io.on("reconnect_attempt", () => {
+        setConnBanner("Verbindung getrennt – verbinde neu...");
+      });
+
+      function setConnBanner(text) {
+        const el = document.getElementById("connBanner");
+        if (!el) return;
+        el.textContent = text || "";
+        el.style.display = text ? "block" : "none";
+      }
 
       function init() {
+        setConnBanner("");
         if (roomCode) {
           socket.emit("board:rejoin", { code: roomCode }, (res) => {
             if (!res || !res.ok) {
               roomCode = null;
+              roomLost = true;
               localStorage.removeItem("activityBoardCode");
               renderHome();
             }
@@ -194,6 +213,7 @@
         document.getElementById("main").innerHTML = `
           <div style="display:flex;flex-direction:column;align-items:center;gap:1.5rem">
             <h1>🎭 Activity<span>.</span></h1>
+            ${roomLost ? `<div class="hint">Die Verbindung zum vorherigen Raum ist verloren gegangen (z.B. nach längerer Pause oder Server-Neustart). Bitte neues Board erstellen.</div>` : ""}
             <button class="start-btn" onclick="create()">Board erstellen</button>
           </div>
         `;
