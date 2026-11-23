@@ -197,6 +197,14 @@
 
       function joinTeam(teamId) {
         socket.emit("player:joinTeam", { code: roomCode, teamId });
+        if (state) {
+          state.teams.forEach((t) => {
+            t.players = t.players.filter((p) => p.id !== playerId);
+          });
+          const target = state.teams.find((t) => t.id === teamId);
+          if (target) target.players.push({ id: playerId, name: playerName, connected: true });
+          render();
+        }
       }
 
       function sendReady() {
