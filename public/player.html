@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Activity – Mitspielen</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        min-height: 100vh;
+        background: #0d0d0f;
+        color: #f0f0f0;
+      }
+      body { display: flex; flex-direction: column; padding: 1.5rem 1.25rem; gap: 1.25rem; }
+      h1 { font-size: 26px; font-weight: 800; text-align: center; }
+      h1 span { color: #ff2d78; }
+      input {
+        font-family: inherit;
+        font-size: 18px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid #ffffff25;
+        background: #1a1a20;
+        color: #fff;
+        width: 100%;
+      }
+      input::placeholder { color: #ffffff50; }
+      button {
+        font-family: inherit;
+        font-size: 17px;
+        font-weight: 700;
+        padding: 16px;
+        border-radius: 14px;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+      }
+      .btn-primary { background: #ff2d78; color: #fff; }
+      .btn-secondary { background: #1a1a20; color: #fff; border: 1px solid #ffffff25; }
+      .btn-correct { background: #2ecc71; color: #06220f; font-size: 24px; padding: 28px; }
+      .btn-skip { background: #1a1a20; color: #fff; border: 1px solid #ffffff25; }
+      .error { color: #e74c3c; font-size: 14px; text-align: center; }
+      .center { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 1rem; text-align: center; }
+      .card {
+        background: #1a1a20;
+        border: 1px solid #ffffff15;
+        border-radius: 16px;
+        padding: 14px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+      }
+      .card.active { border-color: #ff2d78; }
+      .card .score { color: #ff2d78; font-weight: 800; font-size: 20px; }
+      .list { display: flex; flex-direction: column; gap: 10px; }
+      .category-chip {
+        align-self: center;
+        background: #1a1a20;
+        border: 1px solid #ffffff20;
+        border-radius: 14px;
+        padding: 8px 18px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .word-box {
+        background: #ff2d7815;
+        border: 2px solid #ff2d78;
+        border-radius: 20px;
+        padding: 28px 20px;
+        text-align: center;
+        font-size: 34px;
+        font-weight: 800;
+        width: 100%;
+      }
+      .timer { font-size: 40px; font-weight: 800; color: #ff2d78; text-align: center; }
+      .correct-count { text-align: center; color: #ffffff80; font-size: 15px; }
+    </style>
+  </head>
+  <body>
+    <div id="main" style="flex:1;display:flex;flex-direction:column;gap:1.25rem"></div>
+
+    <script>
+      const socket = io();
+      let state = null;
+      let roomCode = localStorage.getItem("activityRoomCode") || "";
+      let playerId = localStorage.getItem("activityPlayerId") || "";
+      let playerName = localStorage.getItem("activityPlayerName") || "";
+      let joined = false;
+      let joinError = "";
+      let myWord = null;
+
+      function renderJoinForm() {
+        document.getElementById("main").innerHTML = `
+          <h1>🎭 Activity<span>.</span></h1>
+          <div class="center" style="gap:14px">
+            <input id="codeInput" placeholder="Raum-Code" maxlength="4" value="${roomCode}" style="text-transform:uppercase;text-align:center;letter-spacing:0.1em;font-weight:800" />
+            <input id="nameInput" placeholder="Dein Name" maxlength="24" value="${playerName}" />
+            ${joinError ? `<div class="error">${joinError}</div>` : ""}
+            <button class="btn-primary" onclick="doJoin()">Beitreten</button>
+          </div>
+        `;
+      }
+
+      function doJoin() {
+        const code = document.getElementById("codeInput").value.trim().toUpperCase();
+        const name = document.getElementById("nameInput").value.trim();
+        if (!code || !name) {
+          joinError = "Bitte Code und Namen eingeben";
+          renderJoinForm();
+          return;
+        }
+        socket.emit("player:join", { code, name, playerId }, (res) => {
+          if (!res.ok) {
+            joinError = res.error || "Beitreten fehlgeschlagen";
+            renderJoinForm();
+            return;
+          }
+          roomCode = code;
+          playerId = res.playerId;
+          playerName = res.name;
+          localStorage.setItem("activityRoomCode", roomCode);
+          localStorage.setItem("activityPlayerId", playerId);
+          localStorage.setItem("activityPlayerName", playerName);
+          joined = true;
+          joinError = "";
+          render();
+        });
+      }
+
+      if (roomCode && playerId && playerName) {
+        const tryAutoJoin = () => {
+          socket.emit("player:join", { code: roomCode, name: playerName, playerId }, (res) => {
+            if (res.ok) {
+              playerId = res.playerId;
+              joined = true;
+              render();
+            } else {
+              renderJoinForm();
+            }
+          });
+        };
+        if (socket.connected) tryAutoJoin();
+        else socket.on("connect", tryAutoJoin);
+      } else {
+        renderJoinForm();
+      }
+
+      function createTeam() {
+        const name = document.getElementById("teamNameInput").value.trim();
+        if (!name) return;
+        socket.emit("player:createTeam", { code: roomCode, teamName: name });
+        document.getElementById("teamNameInput").value = "";
+      }
+
+      function joinTeam(teamId) {
+        socket.emit("player:joinTeam", { code: roomCode, teamId });
+      }
+
+      function sendReady() {
+        socket.emit("player:ready", { code: roomCode });
+      }
+
+      function sendCorrect() {
+        socket.emit("player:correct", { code: roomCode });
+      }
+
+      function sendSkip() {
+        socket.emit("player:skip", { code: roomCode });
+      }
+
+      socket.on("turn:word", (w) => {
+        myWord = w;
+        render();
+      });
+
+      socket.on("turn:tick", ({ secondsLeft }) => {
+        if (state) state.secondsLeft = secondsLeft;
+        const el = document.getElementById("playerTimer");
+        if (el) el.textContent = secondsLeft;
+      });
+
+      socket.on("room:state", (s) => {
+        state = s;
+        if (s.phase !== "playing") myWord = null;
+        render();
+      });
+
+      function myTeam() {
+        if (!state) return null;
+        return state.teams.find((t) => t.players.some((p) => p.id === playerId)) || null;
+      }
+
+      function scoreList() {
+        if (!state) return "";
+        return `<div class="list">${state.teams
+          .map((t) => `<div class="card ${t.id === state.currentTeamId ? "active" : ""}"><span>${t.name}</span><span class="score">${t.score}</span></div>`)
+          .join("")}</div>`;
+      }
+
+      function render() {
+        if (!joined || !state) return;
+        const main = document.getElementById("main");
+        const team = myTeam();
+
+        if (!team) {
+          main.innerHTML = `
+            <h1>🎭 Activity<span>.</span></h1>
+            <div style="text-align:center;color:#ffffff80">Wähle oder erstelle dein Team</div>
+            <div class="list">
+              ${state.teams.map((t) => `<button class="btn-secondary" onclick="joinTeam('${t.id}')">${t.name} (${t.players.length})</button>`).join("")}
+            </div>
+            <input id="teamNameInput" placeholder="Neues Team benennen" />
+            <button class="btn-primary" onclick="createTeam()">Team erstellen</button>
+          `;
+          return;
+        }
+
+        if (state.phase === "lobby") {
+          main.innerHTML = `
+            <h1>🎭 Activity<span>.</span></h1>
+            <div style="text-align:center;color:#ffffff80">Du bist in <strong>${team.name}</strong><br/>Warte auf Spielstart...</div>
+            ${scoreList()}
+          `;
+          return;
+        }
+
+        const isMe = state.currentPlayerId === playerId;
+
+        if (state.phase === "ready") {
+          if (isMe) {
+            main.innerHTML = `
+              <div class="center" style="gap:16px">
+                <div>Du bist dran!</div>
+                <div class="category-chip">${state.currentCategoryLabel}</div>
+                <button class="btn-primary" onclick="sendReady()">Los!</button>
+              </div>
+            `;
+          } else {
+            main.innerHTML = `
+              <div class="center" style="gap:14px">
+                <div class="category-chip">${state.currentCategoryLabel}</div>
+                <div>${state.currentPlayerName} ist dran<br/>(${teamName(state.currentTeamId)})</div>
+                <div style="color:#ffffff60">Gleich geht's los...</div>
+              </div>
+              ${scoreList()}
+            `;
+          }
+          return;
+        }
+
+        if (state.phase === "playing") {
+          if (isMe) {
+            main.innerHTML = `
+              <div class="category-chip">${state.currentCategoryLabel}</div>
+              <div class="timer" id="playerTimer">${state.secondsLeft}</div>
+              <div class="word-box">${myWord ? myWord.word : "..."}</div>
+              <div class="correct-count">${state.turnCorrectCount} richtig in dieser Runde</div>
+              <button class="btn-correct" onclick="sendCorrect()">✓ Richtig!</button>
+              <button class="btn-skip" onclick="sendSkip()">Überspringen</button>
+            `;
+          } else {
+            main.innerHTML = `
+              <div class="category-chip">${state.currentCategoryLabel}</div>
+              <div class="timer" id="playerTimer">${state.secondsLeft}</div>
+              <div style="text-align:center">${state.currentPlayerName} (${teamName(state.currentTeamId)}) ist dran</div>
+              ${scoreList()}
+            `;
+          }
+          return;
+        }
+
+        if (state.phase === "turnEnd") {
+          const s = state.lastSummary || {};
+          main.innerHTML = `
+            <div class="center" style="gap:14px">
+              <div>${s.playerName} (${s.teamName})</div>
+              <div style="font-size:30px;font-weight:800;color:#ff2d78">${s.correctCount} richtig!</div>
+              <div style="color:#ffffff60">Warte auf nächste Runde...</div>
+            </div>
+            ${scoreList()}
+          `;
+          return;
+        }
+
+        if (state.phase === "finished") {
+          const sorted = state.teams.slice().sort((a, b) => b.score - a.score);
+          main.innerHTML = `
+            <h1>🏆 Spielende</h1>
+            ${sorted.length ? `<div style="text-align:center;font-size:22px;font-weight:800;color:#ffd700">${sorted[0].name} gewinnt!</div>` : ""}
+            ${scoreList()}
+          `;
+        }
+      }
+
+      function teamName(id) {
+        if (!state) return "";
+        const t = state.teams.find((x) => x.id === id);
+        return t ? t.name : "";
+      }
+    </script>
+  </body>
+</html>

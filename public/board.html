@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Activity – Board</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        min-height: 100vh;
+        background: #0d0d0f;
+        color: #f0f0f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 2rem 1.5rem;
+        gap: 1.5rem;
+      }
+      .code-badge {
+        position: fixed;
+        top: 14px;
+        right: 18px;
+        background: #1a1a20;
+        border: 1px solid #ffffff20;
+        border-radius: 10px;
+        padding: 6px 12px;
+        font-size: 13px;
+        color: #ffffff80;
+        letter-spacing: 0.05em;
+      }
+      h1 { font-size: 36px; font-weight: 800; }
+      h1 span { color: #ff2d78; }
+      .roomcode {
+        font-size: 72px;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: #ff2d78;
+        background: #1a1a20;
+        border: 2px solid #ff2d7850;
+        border-radius: 24px;
+        padding: 0.5rem 1.5rem;
+      }
+      .hint { color: #ffffff80; font-size: 17px; text-align: center; }
+      .start-btn {
+        font-family: inherit;
+        font-size: 22px;
+        font-weight: 700;
+        padding: 20px 40px;
+        border-radius: 18px;
+        border: none;
+        background: #ff2d78;
+        color: #fff;
+        cursor: pointer;
+      }
+      .start-btn:disabled { background: #444; cursor: default; }
+      .secondary-btn {
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 10px 18px;
+        border-radius: 12px;
+        border: 1px solid #ffffff25;
+        background: #1a1a20;
+        color: #fff;
+        cursor: pointer;
+      }
+      .duration-row { display: flex; gap: 10px; }
+      .duration-btn {
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 700;
+        padding: 10px 20px;
+        border-radius: 12px;
+        border: 1px solid #ffffff25;
+        background: #1a1a20;
+        color: #fff;
+        cursor: pointer;
+      }
+      .duration-btn.active { background: #ff2d78; border-color: #ff2d78; }
+      .teams-wrap {
+        width: 100%;
+        max-width: 800px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        justify-content: center;
+      }
+      .team-card {
+        background: #1a1a20;
+        border: 1px solid #ffffff15;
+        border-radius: 18px;
+        padding: 16px 20px;
+        min-width: 220px;
+        flex: 1;
+      }
+      .team-card.active { border-color: #ff2d78; box-shadow: 0 0 0 2px #ff2d7850; }
+      .team-name { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+      .team-score { font-size: 32px; font-weight: 800; color: #ff2d78; margin-bottom: 8px; }
+      .team-players { color: #ffffff70; font-size: 13px; }
+      .score-adjust { display: flex; gap: 8px; margin-top: 10px; }
+      .score-adjust button {
+        font-family: inherit;
+        font-weight: 700;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid #ffffff25;
+        background: #0d0d0f;
+        color: #fff;
+        cursor: pointer;
+      }
+      .timer-big { font-size: 110px; font-weight: 800; color: #ff2d78; }
+      .category-label {
+        font-size: 24px;
+        font-weight: 700;
+        background: #1a1a20;
+        border: 1px solid #ffffff20;
+        border-radius: 14px;
+        padding: 10px 24px;
+      }
+      .turn-info { font-size: 22px; font-weight: 700; text-align: center; }
+      .summary-box {
+        background: #1a1a20;
+        border-radius: 20px;
+        padding: 28px 36px;
+        text-align: center;
+        max-width: 500px;
+      }
+      .summary-box .big { font-size: 48px; font-weight: 800; color: #ff2d78; margin: 10px 0; }
+      .winner { font-size: 30px; font-weight: 800; color: #ffd700; }
+      .final-list { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 10px; }
+      .final-row { display: flex; justify-content: space-between; background: #1a1a20; border-radius: 14px; padding: 14px 20px; font-size: 18px; font-weight: 700; }
+      .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    </style>
+  </head>
+  <body>
+    <div class="code-badge" id="codeBadge" style="display:none"></div>
+    <div id="main"></div>
+
+    <script>
+      const socket = io();
+      let state = null;
+      let roomCode = localStorage.getItem("activityBoardCode");
+      let selectedDuration = 60;
+
+      function create() {
+        socket.emit("board:create", (res) => {
+          if (res.ok) {
+            roomCode = res.code;
+            localStorage.setItem("activityBoardCode", roomCode);
+          }
+        });
+      }
+
+      if (socket.connected) init();
+      else socket.on("connect", init);
+
+      function init() {
+        if (roomCode) {
+          socket.emit("board:rejoin", { code: roomCode }, (res) => {
+            if (!res || !res.ok) {
+              roomCode = null;
+              localStorage.removeItem("activityBoardCode");
+              renderHome();
+            }
+          });
+        } else {
+          renderHome();
+        }
+      }
+
+      function renderHome() {
+        document.getElementById("main").innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:1.5rem">
+            <h1>🎭 Activity<span>.</span></h1>
+            <button class="start-btn" onclick="create()">Board erstellen</button>
+          </div>
+        `;
+      }
+
+      function joinUrlHint() {
+        return location.origin + "/player.html";
+      }
+
+      function teamCard(t, isActive) {
+        return `
+          <div class="team-card ${isActive ? "active" : ""}">
+            <div class="team-name">${t.name}</div>
+            <div class="team-score">${t.score}</div>
+            <div class="team-players">${t.players.map((p) => p.name + (p.connected ? "" : " (offline)")).join(", ") || "noch keine Spieler"}</div>
+            <div class="score-adjust">
+              <button onclick="adjustScore('${t.id}', -1)">−</button>
+              <button onclick="adjustScore('${t.id}', 1)">+</button>
+            </div>
+          </div>
+        `;
+      }
+
+      function adjustScore(teamId, delta) {
+        socket.emit("board:adjustScore", { code: roomCode, teamId, delta });
+      }
+
+      function startGame() {
+        socket.emit("board:startGame", { code: roomCode, turnSeconds: selectedDuration });
+      }
+
+      function setDuration(sec) {
+        selectedDuration = sec;
+        render();
+      }
+
+      function nextTurn() {
+        socket.emit("board:nextTurn", { code: roomCode });
+      }
+
+      function endGame() {
+        socket.emit("board:endGame", { code: roomCode });
+      }
+
+      function restart() {
+        socket.emit("board:restart", { code: roomCode });
+      }
+
+      socket.on("room:state", (s) => {
+        state = s;
+        render();
+      });
+
+      socket.on("turn:tick", ({ secondsLeft }) => {
+        if (state) {
+          state.secondsLeft = secondsLeft;
+          renderTimerOnly();
+        }
+      });
+
+      function renderTimerOnly() {
+        const el = document.getElementById("timerBig");
+        if (el) el.textContent = state.secondsLeft;
+      }
+
+      function render() {
+        const badge = document.getElementById("codeBadge");
+        const main = document.getElementById("main");
+        if (!state) return;
+
+        badge.style.display = "block";
+        badge.textContent = "Code: " + state.code;
+
+        if (state.phase === "lobby") {
+          const canStart = state.teams.filter((t) => t.players.length > 0).length >= 2;
+          main.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1.5rem;width:100%">
+              <h1>🎭 Activity<span>.</span></h1>
+              <div class="roomcode">${state.code}</div>
+              <div class="hint">Auf dem Handy öffnen: <strong>${joinUrlHint()}</strong><br/>und den Code eingeben.</div>
+              <div class="teams-wrap">${state.teams.length ? state.teams.map((t) => teamCard(t, false)).join("") : `<div class="hint">Noch keine Teams – Spieler erstellen sie selbst auf dem Handy.</div>`}</div>
+              <div>
+                <div class="hint" style="margin-bottom:8px">Rundenlänge</div>
+                <div class="duration-row">
+                  ${[30, 60, 90].map((s) => `<button class="duration-btn ${selectedDuration === s ? "active" : ""}" onclick="setDuration(${s})">${s}s</button>`).join("")}
+                </div>
+              </div>
+              <button class="start-btn" ${canStart ? "" : "disabled"} onclick="startGame()">Spiel starten</button>
+              ${canStart ? "" : `<div class="hint">Mindestens 2 Teams mit je 1 Spieler nötig.</div>`}
+            </div>
+          `;
+        } else if (state.phase === "ready") {
+          main.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1.5rem;width:100%">
+              <div class="category-label">${state.currentCategoryLabel}</div>
+              <div class="turn-info">${state.currentPlayerName} (${teamName(state.currentTeamId)}) ist dran<br/>und startet gleich auf dem Handy...</div>
+              <div class="teams-wrap">${state.teams.map((t) => teamCard(t, t.id === state.currentTeamId)).join("")}</div>
+              <div class="actions"><button class="secondary-btn" onclick="endGame()">Spiel beenden</button></div>
+            </div>
+          `;
+        } else if (state.phase === "playing") {
+          main.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1rem;width:100%">
+              <div class="category-label">${state.currentCategoryLabel}</div>
+              <div class="turn-info">${state.currentPlayerName} (${teamName(state.currentTeamId)})</div>
+              <div class="timer-big" id="timerBig">${state.secondsLeft}</div>
+              <div class="teams-wrap">${state.teams.map((t) => teamCard(t, t.id === state.currentTeamId)).join("")}</div>
+              <div class="actions"><button class="secondary-btn" onclick="endGame()">Spiel beenden</button></div>
+            </div>
+          `;
+        } else if (state.phase === "turnEnd") {
+          const s = state.lastSummary || {};
+          main.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1.5rem;width:100%">
+              <div class="summary-box">
+                <div>${s.playerName} (${s.teamName}) – ${s.categoryLabel}</div>
+                <div class="big">${s.correctCount} ${s.correctCount === 1 ? "Begriff" : "Begriffe"} richtig!</div>
+              </div>
+              <div class="teams-wrap">${state.teams.map((t) => teamCard(t, false)).join("")}</div>
+              <div class="actions">
+                <button class="start-btn" onclick="nextTurn()">Nächste Runde</button>
+                <button class="secondary-btn" onclick="endGame()">Spiel beenden</button>
+              </div>
+            </div>
+          `;
+        } else if (state.phase === "finished") {
+          const sorted = state.teams.slice().sort((a, b) => b.score - a.score);
+          main.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:1.5rem;width:100%">
+              <h1>🏆 Spielende</h1>
+              ${sorted.length ? `<div class="winner">${sorted[0].name} gewinnt!</div>` : ""}
+              <div class="final-list">${sorted.map((t, i) => `<div class="final-row"><span>${i + 1}. ${t.name}</span><span>${t.score}</span></div>`).join("")}</div>
+              <div class="actions">
+                <button class="start-btn" onclick="restart()">Neues Spiel</button>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      function teamName(id) {
+        if (!state) return "";
+        const t = state.teams.find((x) => x.id === id);
+        return t ? t.name : "";
+      }
+    </script>
+  </body>
+</html>

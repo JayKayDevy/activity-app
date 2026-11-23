@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>Activity</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        min-height: 100vh;
+        background: #0d0d0f;
+        color: #f0f0f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        padding: 1.5rem;
+        text-align: center;
+      }
+      h1 { font-size: 42px; font-weight: 800; }
+      h1 span { color: #ff2d78; }
+      .sub { color: #ffffff80; font-size: 15px; max-width: 320px; }
+      .buttons { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 320px; }
+      button {
+        font-family: inherit;
+        font-size: 18px;
+        font-weight: 700;
+        padding: 18px;
+        border-radius: 16px;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-board { background: #ff2d78; color: #fff; }
+      .btn-join { background: #1a1a20; color: #fff; border: 1px solid #ffffff20; }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>🎭 Activity<span>.</span></h1>
+      <div class="sub">Pantomime, Zeichnen &amp; Erklären – live im Team.</div>
+    </div>
+    <div class="buttons">
+      <button class="btn-board" onclick="location.href='board.html'">📺 Board starten</button>
+      <button class="btn-join" onclick="location.href='player.html'">📱 Mitspielen</button>
+    </div>
+  </body>
+</html>
