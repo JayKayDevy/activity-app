@@ -233,6 +233,15 @@ function removePlayerFromAllTeams(room, playerId) {
   });
 }
 
+function isActiveDrawer(room, socket) {
+  return (
+    !!room &&
+    room.phase === "playing" &&
+    room.currentCategory === "zeichnen" &&
+    socket.data.playerId === room.currentPlayerId
+  );
+}
+
 io.on("connection", (socket) => {
   socket.on("board:create", (cb) => {
     const code = makeRoomCode();
@@ -328,6 +337,7 @@ io.on("connection", (socket) => {
     room.currentWord = drawWord(room, room.currentCategory);
     sendWordToActivePlayer(room);
     broadcastState(room);
+    if (room.currentCategory === "zeichnen") io.to(room.code).emit("draw:event", { type: "clear" });
   });
 
   socket.on("player:skip", ({ code }) => {
@@ -336,6 +346,31 @@ io.on("connection", (socket) => {
     if (socket.data.playerId !== room.currentPlayerId) return;
     room.currentWord = drawWord(room, room.currentCategory);
     sendWordToActivePlayer(room);
+    if (room.currentCategory === "zeichnen") io.to(room.code).emit("draw:event", { type: "clear" });
+  });
+
+  socket.on("draw:start", ({ code, x, y }) => {
+    const room = rooms[code];
+    if (!isActiveDrawer(room, socket)) return;
+    socket.to(code).emit("draw:event", { type: "start", x, y });
+  });
+
+  socket.on("draw:move", ({ code, x, y }) => {
+    const room = rooms[code];
+    if (!isActiveDrawer(room, socket)) return;
+    socket.to(code).emit("draw:event", { type: "move", x, y });
+  });
+
+  socket.on("draw:end", ({ code }) => {
+    const room = rooms[code];
+    if (!isActiveDrawer(room, socket)) return;
+    socket.to(code).emit("draw:event", { type: "end" });
+  });
+
+  socket.on("draw:clear", ({ code }) => {
+    const room = rooms[code];
+    if (!isActiveDrawer(room, socket)) return;
+    io.to(code).emit("draw:event", { type: "clear" });
   });
 
   socket.on("board:nextTurn", ({ code }) => {

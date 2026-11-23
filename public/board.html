@@ -133,6 +133,13 @@
       .final-list { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 10px; }
       .final-row { display: flex; justify-content: space-between; background: #1a1a20; border-radius: 14px; padding: 14px 20px; font-size: 18px; font-weight: 700; }
       .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+      .draw-canvas-board {
+        width: 100%;
+        max-width: 700px;
+        aspect-ratio: 4 / 3;
+        background: #fff;
+        border-radius: 20px;
+      }
     </style>
   </head>
   <body>
@@ -223,7 +230,36 @@
         socket.emit("board:restart", { code: roomCode });
       }
 
+      let drawCtx = null;
+
+      function attachDrawCanvas(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        canvas.width = 800;
+        canvas.height = 600;
+        drawCtx = canvas.getContext("2d");
+        drawCtx.lineWidth = 6;
+        drawCtx.lineCap = "round";
+        drawCtx.lineJoin = "round";
+        drawCtx.strokeStyle = "#0d0d0f";
+      }
+
+      socket.on("draw:event", (e) => {
+        if (!drawCtx) return;
+        const canvas = drawCtx.canvas;
+        if (e.type === "clear") {
+          drawCtx.clearRect(0, 0, canvas.width, canvas.height);
+        } else if (e.type === "start") {
+          drawCtx.beginPath();
+          drawCtx.moveTo(e.x * canvas.width, e.y * canvas.height);
+        } else if (e.type === "move") {
+          drawCtx.lineTo(e.x * canvas.width, e.y * canvas.height);
+          drawCtx.stroke();
+        }
+      });
+
       socket.on("room:state", (s) => {
+        drawCtx = null;
         state = s;
         render();
       });
@@ -276,15 +312,18 @@
             </div>
           `;
         } else if (state.phase === "playing") {
+          const isDrawing = state.currentCategory === "zeichnen";
           main.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;gap:1rem;width:100%">
               <div class="category-label">${state.currentCategoryLabel}</div>
               <div class="turn-info">${state.currentPlayerName} (${teamName(state.currentTeamId)})</div>
               <div class="timer-big" id="timerBig">${state.secondsLeft}</div>
+              ${isDrawing ? `<canvas class="draw-canvas-board" id="boardDrawCanvas"></canvas>` : ""}
               <div class="teams-wrap">${state.teams.map((t) => teamCard(t, t.id === state.currentTeamId)).join("")}</div>
               <div class="actions"><button class="secondary-btn" onclick="endGame()">Spiel beenden</button></div>
             </div>
           `;
+          if (isDrawing) attachDrawCanvas("boardDrawCanvas");
         } else if (state.phase === "turnEnd") {
           const s = state.lastSummary || {};
           main.innerHTML = `
