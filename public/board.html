@@ -209,6 +209,14 @@
         socket.emit("board:adjustScore", { code: roomCode, teamId, delta });
       }
 
+      function addTeam() {
+        const input = document.getElementById("newTeamName");
+        const name = input.value.trim();
+        if (!name) return;
+        socket.emit("player:createTeam", { code: roomCode, teamName: name });
+        input.value = "";
+      }
+
       function startGame() {
         socket.emit("board:startGame", { code: roomCode, turnSeconds: selectedDuration });
       }
@@ -291,7 +299,11 @@
               <h1>🎭 Activity<span>.</span></h1>
               <div class="roomcode">${state.code}</div>
               <div class="hint">Auf dem Handy öffnen: <strong>${joinUrlHint()}</strong><br/>und den Code eingeben.</div>
-              <div class="teams-wrap">${state.teams.length ? state.teams.map((t) => teamCard(t, false)).join("") : `<div class="hint">Noch keine Teams – Spieler erstellen sie selbst auf dem Handy.</div>`}</div>
+              <div class="teams-wrap">${state.teams.length ? state.teams.map((t) => teamCard(t, false)).join("") : `<div class="hint">Noch keine Teams – lege unten welche an.</div>`}</div>
+              <div style="display:flex;gap:10px;width:100%;max-width:400px">
+                <input id="newTeamName" placeholder="Team-Name (z.B. Devs)" style="flex:1;font-family:inherit;font-size:16px;padding:12px 14px;border-radius:12px;border:1px solid #ffffff25;background:#1a1a20;color:#fff" />
+                <button class="secondary-btn" onclick="addTeam()">Team anlegen</button>
+              </div>
               <div>
                 <div class="hint" style="margin-bottom:8px">Rundenlänge</div>
                 <div class="duration-row">

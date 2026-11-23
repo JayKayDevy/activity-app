@@ -165,13 +165,6 @@
         renderJoinForm();
       }
 
-      function createTeam() {
-        const name = document.getElementById("teamNameInput").value.trim();
-        if (!name) return;
-        socket.emit("player:createTeam", { code: roomCode, teamName: name });
-        document.getElementById("teamNameInput").value = "";
-      }
-
       function joinTeam(teamId) {
         socket.emit("player:joinTeam", { code: roomCode, teamId });
       }
@@ -291,21 +284,28 @@
         if (!team) {
           main.innerHTML = `
             <h1>🎭 Activity<span>.</span></h1>
-            <div style="text-align:center;color:#ffffff80">Wähle oder erstelle dein Team</div>
-            <div class="list">
-              ${state.teams.map((t) => `<button class="btn-secondary" onclick="joinTeam('${t.id}')">${t.name} (${t.players.length})</button>`).join("")}
-            </div>
-            <input id="teamNameInput" placeholder="Neues Team benennen" />
-            <button class="btn-primary" onclick="createTeam()">Team erstellen</button>
+            <div style="text-align:center;color:#ffffff80">Wähle dein Team</div>
+            ${
+              state.teams.length
+                ? `<div class="list">${state.teams.map((t) => `<button class="btn-secondary" onclick="joinTeam('${t.id}')">${t.name} (${t.players.length})</button>`).join("")}</div>`
+                : `<div style="text-align:center;color:#ffffff60">Warte, bis der Host die Teams auf dem Board anlegt...</div>`
+            }
           `;
           return;
         }
 
         if (state.phase === "lobby") {
+          const otherTeams = state.teams.filter((t) => t.id !== team.id);
           main.innerHTML = `
             <h1>🎭 Activity<span>.</span></h1>
             <div style="text-align:center;color:#ffffff80">Du bist in <strong>${team.name}</strong><br/>Warte auf Spielstart...</div>
             ${scoreList()}
+            ${
+              otherTeams.length
+                ? `<div style="text-align:center;color:#ffffff60;font-size:14px">Noch wechseln?</div>
+                   <div class="list">${otherTeams.map((t) => `<button class="btn-secondary" onclick="joinTeam('${t.id}')">Zu ${t.name} wechseln</button>`).join("")}</div>`
+                : ""
+            }
           `;
           return;
         }
