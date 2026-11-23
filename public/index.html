@@ -4,13 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
     <title>Activity</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;700;800&display=swap" rel="stylesheet" />
     <style>
+      :root {
+        --cream: #f2ece0;
+        --coral: #f2735c;
+        --yellow: #f5e94a;
+        --navy: #16215a;
+        --navy-soft: #16215a99;
+        --white: #ffffff;
+      }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
-        font-family: "Segoe UI", Arial, sans-serif;
+        font-family: "Poppins", "Segoe UI", Arial, sans-serif;
         min-height: 100vh;
-        background: #0d0d0f;
-        color: #f0f0f0;
+        background: var(--cream);
+        color: var(--navy);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -20,20 +29,20 @@
         text-align: center;
       }
       h1 { font-size: 42px; font-weight: 800; }
-      h1 span { color: #ff2d78; }
-      .sub { color: #ffffff80; font-size: 15px; max-width: 320px; }
+      h1 span { color: var(--coral); }
+      .sub { color: var(--navy-soft); font-size: 15px; max-width: 320px; }
       .buttons { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 320px; }
       button {
         font-family: inherit;
         font-size: 18px;
         font-weight: 700;
         padding: 18px;
-        border-radius: 16px;
+        border-radius: 999px;
         border: none;
         cursor: pointer;
       }
-      .btn-board { background: #ff2d78; color: #fff; }
-      .btn-join { background: #1a1a20; color: #fff; border: 1px solid #ffffff20; }
+      .btn-board { background: var(--coral); color: var(--white); }
+      .btn-join { background: var(--white); color: var(--navy); border: 2px solid var(--navy); }
     </style>
   </head>
   <body>

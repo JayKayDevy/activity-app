@@ -5,13 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Activity – Board</title>
     <script src="/socket.io/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet" />
     <style>
+      :root {
+        --cream: #f2ece0;
+        --coral: #f2735c;
+        --yellow: #f5e94a;
+        --navy: #16215a;
+        --navy-soft: #16215a99;
+        --white: #ffffff;
+      }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
-        font-family: "Segoe UI", Arial, sans-serif;
+        font-family: "Poppins", "Segoe UI", Arial, sans-serif;
         min-height: 100vh;
-        background: #0d0d0f;
-        color: #f0f0f0;
+        background: var(--cream);
+        color: var(--navy);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -22,48 +31,49 @@
         position: fixed;
         top: 14px;
         right: 18px;
-        background: #1a1a20;
-        border: 1px solid #ffffff20;
+        background: var(--white);
+        border: 2px solid var(--navy);
         border-radius: 10px;
         padding: 6px 12px;
         font-size: 13px;
-        color: #ffffff80;
+        font-weight: 600;
+        color: var(--navy);
         letter-spacing: 0.05em;
       }
       h1 { font-size: 36px; font-weight: 800; }
-      h1 span { color: #ff2d78; }
+      h1 span { color: var(--coral); }
       .roomcode {
         font-size: 72px;
         font-weight: 800;
         letter-spacing: 0.1em;
-        color: #ff2d78;
-        background: #1a1a20;
-        border: 2px solid #ff2d7850;
+        color: var(--navy);
+        background: var(--yellow);
+        border: 3px solid var(--navy);
         border-radius: 24px;
         padding: 0.5rem 1.5rem;
       }
-      .hint { color: #ffffff80; font-size: 17px; text-align: center; }
+      .hint { color: var(--navy-soft); font-size: 17px; text-align: center; }
       .start-btn {
         font-family: inherit;
         font-size: 22px;
         font-weight: 700;
         padding: 20px 40px;
-        border-radius: 18px;
+        border-radius: 999px;
         border: none;
-        background: #ff2d78;
-        color: #fff;
+        background: var(--coral);
+        color: var(--white);
         cursor: pointer;
       }
-      .start-btn:disabled { background: #444; cursor: default; }
+      .start-btn:disabled { background: #d8d2c6; color: var(--navy-soft); cursor: default; }
       .secondary-btn {
         font-family: inherit;
         font-size: 15px;
         font-weight: 600;
         padding: 10px 18px;
-        border-radius: 12px;
-        border: 1px solid #ffffff25;
-        background: #1a1a20;
-        color: #fff;
+        border-radius: 999px;
+        border: 2px solid var(--navy);
+        background: var(--white);
+        color: var(--navy);
         cursor: pointer;
       }
       .duration-row { display: flex; gap: 10px; }
@@ -72,13 +82,13 @@
         font-size: 16px;
         font-weight: 700;
         padding: 10px 20px;
-        border-radius: 12px;
-        border: 1px solid #ffffff25;
-        background: #1a1a20;
-        color: #fff;
+        border-radius: 999px;
+        border: 2px solid var(--navy);
+        background: var(--white);
+        color: var(--navy);
         cursor: pointer;
       }
-      .duration-btn.active { background: #ff2d78; border-color: #ff2d78; }
+      .duration-btn.active { background: var(--navy); border-color: var(--navy); color: var(--white); }
       .teams-wrap {
         width: 100%;
         max-width: 800px;
@@ -88,17 +98,17 @@
         justify-content: center;
       }
       .team-card {
-        background: #1a1a20;
-        border: 1px solid #ffffff15;
+        background: var(--white);
+        border: 2px solid var(--navy);
         border-radius: 18px;
         padding: 16px 20px;
         min-width: 220px;
         flex: 1;
       }
-      .team-card.active { border-color: #ff2d78; box-shadow: 0 0 0 2px #ff2d7850; }
+      .team-card.active { border-color: var(--coral); box-shadow: 0 0 0 3px #f2735c40; }
       .team-name { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
-      .team-score { font-size: 32px; font-weight: 800; color: #ff2d78; margin-bottom: 8px; }
-      .team-players { color: #ffffff70; font-size: 13px; }
+      .team-score { font-size: 32px; font-weight: 800; color: var(--coral); margin-bottom: 8px; }
+      .team-players { color: var(--navy-soft); font-size: 13px; }
       .score-adjust { display: flex; gap: 8px; margin-top: 10px; }
       .score-adjust button {
         font-family: inherit;
@@ -106,38 +116,40 @@
         width: 32px;
         height: 32px;
         border-radius: 8px;
-        border: 1px solid #ffffff25;
-        background: #0d0d0f;
-        color: #fff;
+        border: 2px solid var(--navy);
+        background: var(--cream);
+        color: var(--navy);
         cursor: pointer;
       }
-      .timer-big { font-size: 110px; font-weight: 800; color: #ff2d78; }
+      .timer-big { font-size: 110px; font-weight: 800; color: var(--coral); }
       .category-label {
         font-size: 24px;
         font-weight: 700;
-        background: #1a1a20;
-        border: 1px solid #ffffff20;
+        background: var(--yellow);
+        border: 2px solid var(--navy);
         border-radius: 14px;
         padding: 10px 24px;
       }
       .turn-info { font-size: 22px; font-weight: 700; text-align: center; }
       .summary-box {
-        background: #1a1a20;
+        background: var(--white);
+        border: 2px solid var(--navy);
         border-radius: 20px;
         padding: 28px 36px;
         text-align: center;
         max-width: 500px;
       }
-      .summary-box .big { font-size: 48px; font-weight: 800; color: #ff2d78; margin: 10px 0; }
-      .winner { font-size: 30px; font-weight: 800; color: #ffd700; }
+      .summary-box .big { font-size: 48px; font-weight: 800; color: var(--coral); margin: 10px 0; }
+      .winner { font-size: 30px; font-weight: 800; color: var(--coral); }
       .final-list { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 10px; }
-      .final-row { display: flex; justify-content: space-between; background: #1a1a20; border-radius: 14px; padding: 14px 20px; font-size: 18px; font-weight: 700; }
+      .final-row { display: flex; justify-content: space-between; background: var(--white); border: 2px solid var(--navy); border-radius: 14px; padding: 14px 20px; font-size: 18px; font-weight: 700; }
       .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
       .draw-canvas-board {
         width: 100%;
         max-width: 700px;
         aspect-ratio: 4 / 3;
         background: #fff;
+        border: 2px solid var(--navy);
         border-radius: 20px;
       }
     </style>
@@ -321,7 +333,7 @@
               <div class="hint">Auf dem Handy öffnen: <strong>${joinUrlHint()}</strong><br/>und den Code eingeben.</div>
               <div class="teams-wrap">${state.teams.length ? state.teams.map((t) => teamCard(t, false)).join("") : `<div class="hint">Noch keine Teams – lege unten welche an.</div>`}</div>
               <div style="display:flex;gap:10px;width:100%;max-width:400px">
-                <input id="newTeamName" placeholder="Team-Name (z.B. Devs)" style="flex:1;font-family:inherit;font-size:16px;padding:12px 14px;border-radius:12px;border:1px solid #ffffff25;background:#1a1a20;color:#fff" />
+                <input id="newTeamName" placeholder="Team-Name (z.B. Devs)" style="flex:1;font-family:inherit;font-size:16px;padding:12px 14px;border-radius:12px;border:2px solid var(--navy);background:var(--white);color:var(--navy)" />
                 <button class="secondary-btn" onclick="addTeam()">Team anlegen</button>
               </div>
               <div>
